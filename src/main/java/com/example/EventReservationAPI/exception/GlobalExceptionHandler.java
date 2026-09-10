@@ -1,6 +1,5 @@
 package com.example.EventReservationAPI.exception;
 
-
 import com.example.EventReservationAPI.dto.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
