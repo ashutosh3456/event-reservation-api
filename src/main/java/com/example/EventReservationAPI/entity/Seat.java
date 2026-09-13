@@ -1,9 +1,8 @@
 package com.example.EventReservationAPI.entity;
-
-
 import jakarta.persistence.*;
 import lombok.*;
-import tools.jackson.databind.annotation.EnumNaming;
+
+import java.util.List;
 
 @Entity
 @Table(name = "seats")
@@ -35,5 +34,5 @@ public class Seat {
     @OneToMany(mappedBy = "seat",
             cascade = CascadeType.ALL,
             fetch = FetchType.LAZY)
-    private java.util.List<Booking> bookings;
+    private List<Booking> bookings;
 }

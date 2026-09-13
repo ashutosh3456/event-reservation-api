@@ -25,5 +25,6 @@ public class EventResponse {
     private String venueName;
     private String organizerName;
     private Long availableSeats;
+    private LocalDateTime createdAt;
 
 }
