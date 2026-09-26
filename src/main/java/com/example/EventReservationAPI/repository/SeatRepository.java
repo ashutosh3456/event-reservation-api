@@ -2,12 +2,16 @@ package com.example.EventReservationAPI.repository;
 
 import com.example.EventReservationAPI.entity.Seat;
 import com.example.EventReservationAPI.entity.SeatStatus;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
 
 @Repository
 public interface SeatRepository extends JpaRepository<Seat,Long> {
@@ -25,4 +29,7 @@ public interface SeatRepository extends JpaRepository<Seat,Long> {
             @Param("eventId") Long eventId,
             @Param("status") SeatStatus status);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("Select s from Seat s where s.id = id")
+    Optional<Seat> findByIdWithLock(@Param("id") Long id);
 }
