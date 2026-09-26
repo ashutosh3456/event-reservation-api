@@ -129,6 +129,7 @@ public class EventService {
 
         event.setStatus(EventStatus.CANCELLED);
         eventRepository.save(event);
+        seatRepository.updateSeatStatusByEventId(id, SeatStatus.AVAILABLE);
     }
 
     private EventResponse mapToResponse(Event event){

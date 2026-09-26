@@ -30,6 +30,6 @@ public interface SeatRepository extends JpaRepository<Seat,Long> {
             @Param("status") SeatStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("Select s from Seat s where s.id = id")
+    @Query("Select s from Seat s where s.id = :id")
     Optional<Seat> findByIdWithLock(@Param("id") Long id);
 }
