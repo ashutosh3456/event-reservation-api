@@ -47,7 +47,11 @@ public class Booking {
 
     @PrePersist
     protected void onCreate(){
-        bookedAt = LocalDateTime.now();
-        status = BookingStatus.PENDING;
+        if (this.status == null) {
+            this.status = BookingStatus.PENDING;
+        }
+        if (this.bookedAt == null) {
+            this.bookedAt = LocalDateTime.now();
+        }
     }
 }

@@ -11,6 +11,8 @@ import com.example.EventReservationAPI.repository.UserRepository;
 import com.example.EventReservationAPI.repository.VenueRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -73,6 +75,7 @@ public class EventService {
         return pageEvent.map(this :: mapToResponse);
     }
 
+    @Cacheable(value = "events", key = "#eventid")
     public EventResponse getEvent(Long eventid){
         Event event = eventRepository
                 .findById(eventid)
@@ -81,6 +84,7 @@ public class EventService {
         return mapToResponse(event);
     }
 
+    @CacheEvict(value = "events", key = "#id")
     @Transactional
     public EventResponse updateEvent(Long id,EventRequest eventRequest,String userEmail){
         User user = userRepository.findByEmail(userEmail)
@@ -109,6 +113,7 @@ public class EventService {
         return mapToResponse(event1);
     }
 
+    @CacheEvict(value = "events", key = "#id")
     @Transactional
     public void cancelEvent(Long id,String userEmail){
         User user = userRepository.findByEmail(userEmail)
@@ -129,7 +134,7 @@ public class EventService {
 
         event.setStatus(EventStatus.CANCELLED);
         eventRepository.save(event);
-        seatRepository.updateSeatStatusByEventId(id, SeatStatus.AVAILABLE);
+        seatRepository.updateSeatStatusByEventId(id, SeatStatus.CANCELLED);
     }
 
     private EventResponse mapToResponse(Event event){
