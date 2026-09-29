@@ -4,6 +4,8 @@ import com.example.EventReservationAPI.dto.request.VenueRequest;
 import com.example.EventReservationAPI.dto.response.ApiResponse;
 import com.example.EventReservationAPI.dto.response.VenueResponse;
 import com.example.EventReservationAPI.service.VenueService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,11 +17,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/venues")
+@Tag(name = "Venues",
+        description = "Venue management endpoints")
 public class VenueController {
 
     private final VenueService venueService;
 
     @PostMapping()
+    @Operation(summary = "Create venue (ADMIN only)")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<VenueResponse>> createVenue(@Valid @RequestBody VenueRequest venueRequest){
         VenueResponse venueResponse = venueService.createVenue(venueRequest);
@@ -29,6 +34,7 @@ public class VenueController {
     }
 
     @GetMapping
+    @Operation(summary = "Get all venues with pagination")
     public ResponseEntity<ApiResponse<Page<VenueResponse>>> getAllVenues(@RequestParam(defaultValue = "0") int page,
                                                                          @RequestParam(defaultValue = "5") int size){
         Page<VenueResponse> venueResponses = venueService.getAllVenue(page,size);
@@ -37,6 +43,7 @@ public class VenueController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Get venue by ID")
     public ResponseEntity<ApiResponse<VenueResponse>> getVenue(@PathVariable Long id){
         VenueResponse venueResponse = venueService.getVenue(id);
 
@@ -44,6 +51,7 @@ public class VenueController {
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Update venue (ADMIN only)")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<VenueResponse>> updateVenue(@PathVariable Long id ,@Valid @RequestBody VenueRequest venueRequest){
         VenueResponse venueResponse = venueService.updateVenue(id,venueRequest);
@@ -52,6 +60,7 @@ public class VenueController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Delete venue (ADMIN only)")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteVenue(@PathVariable Long id){
         venueService.deleteVenue(id);

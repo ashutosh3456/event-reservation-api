@@ -4,6 +4,8 @@ import com.example.EventReservationAPI.dto.request.EventRequest;
 import com.example.EventReservationAPI.dto.response.ApiResponse;
 import com.example.EventReservationAPI.dto.response.EventResponse;
 import com.example.EventReservationAPI.service.EventService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -16,11 +18,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/events")
+@Tag(name = "Events",
+        description = "Event management endpoints")
 public class EventController {
 
     private final EventService eventService;
 
     @PostMapping()
+    @Operation(summary = "Create event (ORGANIZER only)")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<ApiResponse<EventResponse>> createEvent(@Valid @RequestBody EventRequest eventRequest,Authentication authentication){
 
@@ -32,6 +37,10 @@ public class EventController {
     }
 
     @GetMapping()
+    @Operation(
+            summary = "Get all upcoming events",
+            description = "Filter by city and category. Paginated."
+    )
     public ResponseEntity<ApiResponse<Page<EventResponse>>> getAllEvents(@RequestParam(defaultValue = "0") int page,
                                                                          @RequestParam(defaultValue = "5") int size,
                                                                          @RequestParam(required = false) String city,
@@ -42,6 +51,7 @@ public class EventController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Get event by ID")
     public ResponseEntity<ApiResponse<EventResponse>> getEvent(@PathVariable Long id){
         EventResponse eventResponses = eventService.getEvent(id);
 
@@ -49,6 +59,7 @@ public class EventController {
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Update event (ORGANIZER only)")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<ApiResponse<EventResponse>> updateEvent(@PathVariable Long id,
                                                                   @Valid @RequestBody EventRequest eventRequest,
@@ -60,6 +71,7 @@ public class EventController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Cancel event (ORGANIZER only)")
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<ApiResponse<Void>> cancelEvent(@PathVariable Long id,Authentication authentication){
 

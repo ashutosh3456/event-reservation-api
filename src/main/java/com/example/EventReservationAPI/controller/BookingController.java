@@ -1,10 +1,11 @@
 package com.example.EventReservationAPI.controller;
 
-
 import com.example.EventReservationAPI.dto.request.BookingRequest;
 import com.example.EventReservationAPI.dto.response.ApiResponse;
 import com.example.EventReservationAPI.dto.response.BookingResponse;
 import com.example.EventReservationAPI.service.BookingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,12 +18,19 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/bookings")
+@Tag(name = "Bookings",
+        description = "Seat booking endpoints")
 public class BookingController {
 
     private final BookingService bookingService;
 
     @PostMapping()
     @PreAuthorize("hasRole('ATTENDEE')")
+    @Operation(
+            summary = "Book a seat (ATTENDEE only)",
+            description = "Uses pessimistic locking " +
+                    "to prevent double booking"
+    )
     public ResponseEntity<ApiResponse<BookingResponse>> createBooking(@Valid @RequestBody BookingRequest bookingRequest,
                                                                       Authentication authentication){
 
@@ -33,6 +41,7 @@ public class BookingController {
     }
 
     @GetMapping("/my")
+    @Operation(summary = "Get my bookings")
     public ResponseEntity<ApiResponse<Page<BookingResponse>>> getAllBooking(Authentication authentication,
                                                                             @RequestParam(defaultValue = "0") int page,
                                                                             @RequestParam(defaultValue = "5") int size){
@@ -42,6 +51,7 @@ public class BookingController {
     }
 
     @GetMapping("/my/{id}")
+    @Operation(summary = "Get booking by ID")
     public ResponseEntity<ApiResponse<BookingResponse>> getBookingById(@PathVariable Long id, Authentication authentication){
         BookingResponse bookingResponse = bookingService.getBookingById(id, authentication.getName());
 
@@ -49,6 +59,7 @@ public class BookingController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Cancel booking")
     public ResponseEntity<ApiResponse<Void>> cancelBooking(@PathVariable Long id,Authentication authentication){
         bookingService.cancelBooking(id, authentication.getName());
 
