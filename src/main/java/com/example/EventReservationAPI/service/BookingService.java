@@ -1,34 +1,44 @@
 package com.example.EventReservationAPI.service;
 
 import com.example.EventReservationAPI.dto.request.BookingRequest;
+import com.example.EventReservationAPI.dto.request.HoldSeatRequest;
 import com.example.EventReservationAPI.dto.response.BookingResponse;
+import com.example.EventReservationAPI.dto.response.HoldSeatResponse;
 import com.example.EventReservationAPI.entity.*;
 import com.example.EventReservationAPI.exception.BusinessException;
 import com.example.EventReservationAPI.exception.ResourceNotFoundException;
+import com.example.EventReservationAPI.exception.SeatNotAvailableException;
+import com.example.EventReservationAPI.exception.UnauthorizedException;
 import com.example.EventReservationAPI.repository.BookingRepository;
 import com.example.EventReservationAPI.repository.EventRepository;
 import com.example.EventReservationAPI.repository.SeatRepository;
 import com.example.EventReservationAPI.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 public class BookingService {
+    private final StringRedisTemplate stringRedisTemplate;
     private final BookingRepository bookingRepository;
     private final EventRepository eventRepository;
     private final SeatRepository seatRepository;
     private final UserRepository userRepository;
 
     @Transactional
+    @CacheEvict(value = "events", key = "#bookingRequest.eventId")
     public BookingResponse bookSeat(BookingRequest bookingRequest , String userEmail){
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -42,6 +52,18 @@ public class BookingService {
             throw new BusinessException("Event has completed or ongoing");
         }
 
+        String rediKey = "seat_hold" + ":" + bookingRequest.getEventId() + ":" + bookingRequest.getSeatId();
+
+        String storedKeyValue = stringRedisTemplate.opsForValue().get(rediKey);
+
+        if(storedKeyValue == null){
+            throw new ResourceNotFoundException("Hold expired. Reselect seat.");
+        }
+
+        if(!userEmail.equalsIgnoreCase(storedKeyValue)){
+            throw new UnauthorizedException("You do not own this seat");
+        }
+
         Seat seat = seatRepository.findByIdWithLock(bookingRequest.getSeatId())
                 .orElseThrow(() -> new ResourceNotFoundException("Seat not found"));
 
@@ -51,18 +73,12 @@ public class BookingService {
             throw new BusinessException("Seat does not belong to this Event");
         }
 
-        if(seatStatus != SeatStatus.AVAILABLE){
-            throw new BusinessException("Seat is already Booked");
-        }
-
-        boolean alreadyBooked = bookingRepository
-                .existsByUserIdAndSeatId(user.getId() , seat.getId());
-
-        if(alreadyBooked){
-            throw new BusinessException("You have already booked this seat");
+        if(seat.getStatus() != SeatStatus.HELD){
+            throw new RuntimeException("Seat is not in a valid state to be confirmed. Current status: " + seat.getStatus());
         }
 
         seat.setStatus(SeatStatus.BOOKED);
+        seat.setHeldAt(null);
         seatRepository.save(seat);
 
         Booking booking = Booking.builder()
@@ -75,7 +91,8 @@ public class BookingService {
                 .build();
 
         Booking savedBooking = bookingRepository.save(booking);
-         return mapToResponse(savedBooking);
+        stringRedisTemplate.delete(rediKey);
+        return mapToResponse(savedBooking);
 
     }
 
@@ -126,6 +143,77 @@ public class BookingService {
         Seat seat = booking.getSeat();
         seat.setStatus(SeatStatus.AVAILABLE);
         seatRepository.save(seat);
+
+    }
+
+    public HoldSeatResponse holdSeat(HoldSeatRequest holdSeatRequest , String userEmail){
+
+        Seat seat = seatRepository.findById(holdSeatRequest.getSeatId())
+                .orElseThrow(() -> new ResourceNotFoundException("Seat not found with Id " + holdSeatRequest.getSeatId()));
+
+        if(!seat.getEvent().getId().equals(holdSeatRequest.getEventId())){
+            throw new RuntimeException("Seat does not belong to the specified event");
+        }
+
+        if(seat.getStatus() != SeatStatus.AVAILABLE){
+            throw new SeatNotAvailableException("Seat is already " + seat.getStatus());
+        }
+
+        String redisKey = "seat_hold" + ":" + holdSeatRequest.getEventId() + ":" + holdSeatRequest.getSeatId();
+
+        Boolean lockAcquired = stringRedisTemplate.opsForValue()
+                .setIfAbsent(redisKey,userEmail,10, TimeUnit.MINUTES);
+
+        if(Boolean.FALSE.equals(lockAcquired)){
+            throw new RuntimeException("Seat is already held by another user.");
+        }
+
+        try{
+            seat.setStatus(SeatStatus.HELD);
+            seat.setHeldAt(LocalDateTime.now());
+            seatRepository.save(seat);
+        }
+        catch(Exception ex){
+            stringRedisTemplate.delete(redisKey);
+            throw ex;
+        }
+
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(10);
+
+        return HoldSeatResponse.builder()
+                .eventId(holdSeatRequest.getEventId())
+                .seatId(holdSeatRequest.getSeatId())
+                .holdToken(userEmail)
+                .expiresAt(expiresAt)
+                .message("Seat is hold. Please make payment to book")
+                .build();
+    }
+
+    public void releaseHold(Long id , String userEmail){
+        Seat seat  = seatRepository.findById(id)
+                .orElseThrow(() -> new SeatNotAvailableException("Seat not found"));
+
+
+        String rediKey = "seat_hold" + ":" + seat.getEvent().getId() + ":" + seat.getId();
+
+        String storedKeyValue = stringRedisTemplate.opsForValue().get(rediKey);
+
+        if(storedKeyValue == null){
+            if (seat.getStatus() == SeatStatus.HELD) {
+                seat.setStatus(SeatStatus.AVAILABLE);
+                seatRepository.save(seat);
+            }
+            return;
+        }
+
+        if(!userEmail.equalsIgnoreCase(storedKeyValue)){
+            throw new UnauthorizedException("You do not own this seat");
+        }
+
+        seat.setStatus(SeatStatus.AVAILABLE);
+        seat.setHeldAt(null);
+        seatRepository.save(seat);
+        stringRedisTemplate.delete(rediKey);
 
     }
 

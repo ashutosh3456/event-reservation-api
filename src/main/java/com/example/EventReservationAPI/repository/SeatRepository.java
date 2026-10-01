@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
@@ -32,4 +33,9 @@ public interface SeatRepository extends JpaRepository<Seat,Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("Select s from Seat s where s.id = :id")
     Optional<Seat> findByIdWithLock(@Param("id") Long id);
+
+    @Modifying
+    @Query("UPDATE Seat s SET s.status = 'AVAILABLE', s.heldAt = null " +
+            "WHERE s.status = 'HELD' AND s.heldAt < :cutoff")
+    int releaseExpiredHolds(@Param("cutoff") LocalDateTime cutoff);
 }

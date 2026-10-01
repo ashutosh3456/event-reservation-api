@@ -1,8 +1,10 @@
 package com.example.EventReservationAPI.controller;
 
 import com.example.EventReservationAPI.dto.request.BookingRequest;
+import com.example.EventReservationAPI.dto.request.HoldSeatRequest;
 import com.example.EventReservationAPI.dto.response.ApiResponse;
 import com.example.EventReservationAPI.dto.response.BookingResponse;
+import com.example.EventReservationAPI.dto.response.HoldSeatResponse;
 import com.example.EventReservationAPI.service.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,7 +26,7 @@ public class BookingController {
 
     private final BookingService bookingService;
 
-    @PostMapping()
+    @PostMapping("/confirm")
     @PreAuthorize("hasRole('ATTENDEE')")
     @Operation(
             summary = "Book a seat (ATTENDEE only)",
@@ -38,6 +40,18 @@ public class BookingController {
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Booking created Successfully",
                 bookingResponse));
+    }
+
+    @PostMapping("/hold")
+    @PreAuthorize("hasRole('ATTENDEE')")
+    @Operation(summary = "Hold a seat(ATTENDEE only)")
+    public ResponseEntity<ApiResponse<HoldSeatResponse>> holdBooking(@Valid @RequestBody HoldSeatRequest holdSeatRequest,
+                                                                      Authentication authentication){
+
+        HoldSeatResponse holdSeatResponse = bookingService.holdSeat(holdSeatRequest,authentication.getName());
+
+        return ResponseEntity.ok(ApiResponse.success("Seat held successfully for 10 minutes",
+                holdSeatResponse));
     }
 
     @GetMapping("/my")
@@ -64,5 +78,13 @@ public class BookingController {
         bookingService.cancelBooking(id, authentication.getName());
 
         return ResponseEntity.ok(ApiResponse.success("Booking cancelled",null));
+    }
+
+    @DeleteMapping("/hold/{id}")
+    @Operation(summary = "Release hold")
+    public ResponseEntity<ApiResponse<Void>> releaseHold(@PathVariable Long id,Authentication authentication){
+        bookingService.releaseHold(id, authentication.getName());
+
+        return ResponseEntity.ok(ApiResponse.success("Seat Released",null));
     }
 }
