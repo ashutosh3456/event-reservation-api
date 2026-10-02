@@ -1,6 +1,8 @@
 package com.example.EventReservationAPI.exception;
 
 import com.example.EventReservationAPI.dto.response.ApiResponse;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -50,6 +52,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleUnauthorizedException(UnauthorizedException ex){
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler({
+            PessimisticLockingFailureException.class,
+            CannotAcquireLockException.class
+    })
+    public ResponseEntity<ApiResponse<Object>> handleLockTimeout(Exception ex) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("Concurrent update detected on seat. Please try again."));
     }
 
     @ExceptionHandler(Exception.class)

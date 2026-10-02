@@ -65,7 +65,7 @@ public class BookingService {
         }
 
         Seat seat = seatRepository.findByIdWithLock(bookingRequest.getSeatId())
-                .orElseThrow(() -> new ResourceNotFoundException("Seat not found"));
+                .orElseThrow(() -> new SeatNotAvailableException("Seat not found"));
 
         SeatStatus seatStatus = seat.getStatus();
 
@@ -74,7 +74,7 @@ public class BookingService {
         }
 
         if(seat.getStatus() != SeatStatus.HELD){
-            throw new RuntimeException("Seat is not in a valid state to be confirmed. Current status: " + seat.getStatus());
+            throw new SeatNotAvailableException("Seat is already " + seat.getStatus() + ". Cannot confirm booking.");
         }
 
         seat.setStatus(SeatStatus.BOOKED);
@@ -148,32 +148,37 @@ public class BookingService {
 
     public HoldSeatResponse holdSeat(HoldSeatRequest holdSeatRequest , String userEmail){
 
-        Seat seat = seatRepository.findById(holdSeatRequest.getSeatId())
-                .orElseThrow(() -> new ResourceNotFoundException("Seat not found with Id " + holdSeatRequest.getSeatId()));
-
-        if(!seat.getEvent().getId().equals(holdSeatRequest.getEventId())){
-            throw new RuntimeException("Seat does not belong to the specified event");
-        }
-
-        if(seat.getStatus() != SeatStatus.AVAILABLE){
-            throw new SeatNotAvailableException("Seat is already " + seat.getStatus());
-        }
-
+        // 1. Atomic Redis gatekeeper FIRST - 49 out of 50 stop here in RAM (< 1ms)
         String redisKey = "seat_hold" + ":" + holdSeatRequest.getEventId() + ":" + holdSeatRequest.getSeatId();
 
         Boolean lockAcquired = stringRedisTemplate.opsForValue()
                 .setIfAbsent(redisKey,userEmail,10, TimeUnit.MINUTES);
 
         if(Boolean.FALSE.equals(lockAcquired)){
-            throw new RuntimeException("Seat is already held by another user.");
+            throw new SeatNotAvailableException("Seat is already held by another user.");
         }
 
-        try{
+        // 2. Only the 1 winning thread hits the database
+        Seat seat;
+        try {
+            seat = seatRepository.findById(holdSeatRequest.getSeatId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Seat not found with Id " + holdSeatRequest.getSeatId()));
+
+            if (!seat.getEvent().getId().equals(holdSeatRequest.getEventId())) {
+                throw new IllegalArgumentException("Seat does not belong to the specified event");
+            }
+
+            // If seat was already booked in DB, rollback Redis hold and reject
+            if (seat.getStatus() != SeatStatus.AVAILABLE) {
+                throw new SeatNotAvailableException("Seat is already " + seat.getStatus());
+            }
+
             seat.setStatus(SeatStatus.HELD);
             seat.setHeldAt(LocalDateTime.now());
             seatRepository.save(seat);
-        }
-        catch(Exception ex){
+
+        } catch (Exception ex) {
+            // Roll back the Redis hold if DB verification or save fails
             stringRedisTemplate.delete(redisKey);
             throw ex;
         }
@@ -185,7 +190,7 @@ public class BookingService {
                 .seatId(holdSeatRequest.getSeatId())
                 .holdToken(userEmail)
                 .expiresAt(expiresAt)
-                .message("Seat is hold. Please make payment to book")
+                .message("Seat is held. Please make payment to book")
                 .build();
     }
 
