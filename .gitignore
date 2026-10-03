@@ -36,3 +36,14 @@ build/
 .env
 
 application-dev.properties
+
+
+# Maven
+target/
+
+# IntelliJ
+.idea/
+*.iml
+
+# Logs
+*.log
